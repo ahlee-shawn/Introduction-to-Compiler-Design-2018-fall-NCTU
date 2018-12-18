@@ -1,0 +1,299 @@
+options
+{
+	IGNORE_CASE = false;
+	MULTI = true;
+	VISITOR = true;
+  ERROR_REPORTING = false;
+}
+
+PARSER_BEGIN(SyntaxChecker)
+
+import java.io.*; 
+import java.util.*;
+
+public class SyntaxChecker {
+  public static void main(String[] args) {
+      try {
+        java.io.FileInputStream file = new java.io.FileInputStream(new java.io.File(args[0]));
+        SyntaxChecker parser = new SyntaxChecker(file);
+        SimpleNode root = parser.Program();
+        if(table.error == 0){
+        	root.dump("");
+        	System.out.println("Type-checking successful." );
+        }else{
+        	for(int i = 0; i < table.error_vec.size(); i++){
+        		System.out.println(table.error_vec.get(i));
+        	}
+        }
+      } catch (Throwable e) {
+        System.out.println("Type-checking Failed: " + e.getMessage());
+      }
+  }
+}
+
+PARSER_END(SyntaxChecker)
+
+//Token Rules and Actions
+SKIP: {
+	" "
+	| "\t"
+	| "\n"
+	| "\r"
+	| <"//" (~["\n","\r"])* ("\n"|"\r")>
+	| < "/*" > : COMMENT_STATE
+}
+
+<COMMENT_STATE> SKIP :
+{
+	< "*/" > : DEFAULT
+	| < ~[] >
+}
+
+TOKEN: {
+	  <CLASS: "class">
+	| <PUBLIC: "public">
+	| <STATIC: "static">
+	| <VOID: "void">
+	| <MAIN: "main">
+	| <INT: "int">
+	| <STRING: "String">
+	| <BOOLEAN: "Boolean">
+	| <IF: "if">
+	| <ELSE: "else">
+	| <RETURN: "return">
+	| <WHILE: "while">
+	| <STSTEM_PRINT: "System.out.println">
+	| <THIS: "this">
+	| <OP: "&&" | "<" | "+" | "-" | "*">
+	| <ASSIGN: "=">
+	| <NEW: "new">
+	| <EXTENDS: "extends">
+	| <TRUE: "true">
+	| <FALSE: "false">
+	| <SYMBOL_ID: ["a"-"z","A"-"Z"](["a"-"z","A"-"Z","0"-"9","_"])*>
+	| <INTEGER_LITERAL: "0" | ["1"-"9"](["0"-"9"])*>
+	| <DELIM: ";">
+}
+
+SimpleNode Program() #Program: {}{
+	MainClass() Class() {return jjtThis;}
+}
+
+SimpleNode Main(): {}{
+	MainClass() {jjtThis.value = "Main class:"; return jjtThis;}
+}
+
+SimpleNode MainClass() #Main_Class: {}{
+	<CLASS> <SYMBOL_ID> "{" <PUBLIC> <STATIC> <VOID> <MAIN> "(" <STRING> "[" "]" <SYMBOL_ID> ")" "{" Statement() "}" "}" {return jjtThis;}
+}
+
+SimpleNode Class(): {}{
+	(ClassDecl())* {jjtThis.value = "Classes:"; return jjtThis;}
+}
+
+SimpleNode ClassDecl() #Classes: 
+{
+	Token t;
+	Token k;
+}
+{
+	LOOKAHEAD(3) <CLASS> (t = <SYMBOL_ID>) "{" Field() Method() "}" {jjtThis.value = t.image; return jjtThis;}
+	| LOOKAHEAD(3) <CLASS> (t = <SYMBOL_ID>) <EXTENDS> (k = <SYMBOL_ID>) "{" Field() Method() "}" {jjtThis.value = t.image + " " + k.image; return jjtThis;}
+}
+
+SimpleNode Field(): {}{
+	(VarDecl())* {jjtThis.value = "Fields:"; return jjtThis;}
+}
+
+SimpleNode Method(): {}{
+	(MethodDecl())* {jjtThis.value = "Methods:"; return jjtThis;}
+}
+
+SimpleNode VarDecl(): 
+{
+	Token t;
+	String s;
+}
+{
+	s = Type() t = <SYMBOL_ID> <DELIM> 
+	{
+		if(s == "int" && !table.int_vec.contains(t.image)){
+			table.int_vec.addElement(t.image);
+		}else if(s == "Boolean" && !table.bool_vec.contains(t.image)){
+			table.bool_vec.addElement(t.image);
+		}else if(s == "String" && !table.String_vec.contains(t.image)){
+			table.String_vec.addElement(t.image);
+		}
+		jjtThis.value = s + " " + t.image;
+		return jjtThis;
+	}
+}
+
+void MethodDecl(): {}{
+	Public_Type_ID_FormalList() 
+	| Var_Stmt_return_exp()
+}
+
+void Var_Stmt_return_exp(): {}{
+	S()
+}
+
+SimpleNode S(): {}{
+	"{" (LOOKAHEAD(2) VarDecl())* (Statement())* <RETURN> Exp() <DELIM> "}"  {jjtThis.value = "Locals:"; return jjtThis;}
+}
+
+SimpleNode Public_Type_ID_FormalList(): 
+{
+	String s;
+	Token t;
+}
+{
+	<PUBLIC> (s = Type()) (t = <SYMBOL_ID>) "(" Formal() ")"  {jjtThis.value = s + " " + t.image; return jjtThis;}
+}
+
+SimpleNode Formal(): {}{
+	FormalList() {jjtThis.value = "Params:"; return jjtThis;}
+}
+
+SimpleNode FormalList(): 
+{
+	String s = "";
+	String i = "";
+	Token t;
+}
+{
+	((s = Type()) (t = <SYMBOL_ID>){i = t.image;} (FormalRest())*)?  
+	{
+		if(s == "int" && !table.int_vec.contains(i)){
+			table.int_vec.addElement(i);
+		}else if(s == "Boolean" && !table.bool_vec.contains(i)){
+			table.bool_vec.addElement(i);
+		}else if(s == "String" && !table.String_vec.contains(i)){
+			table.String_vec.addElement(i);
+		}
+		jjtThis.value = s + " " + i;
+		return jjtThis;
+	}
+}
+
+SimpleNode FormalRest(): 
+{
+	String s = "";
+	Token t;
+}
+{
+	"," s = Type() t = <SYMBOL_ID> 
+	{
+		if(s == "int" && !table.int_vec.contains(t.image)){
+			table.int_vec.addElement(t.image);
+		}else if(s == "Boolean" && !table.bool_vec.contains(t.image)){
+			table.bool_vec.addElement(t.image);
+		}else if(s == "String" && !table.String_vec.contains(t.image)){
+			table.String_vec.addElement(t.image);
+		}
+		jjtThis.value = s + " " + t.image;
+		return jjtThis;
+	} 
+}
+
+String Type(): 
+{
+	Token t;
+}
+{
+	(
+		t = <INT> ("[" "]")? 
+		| t = <BOOLEAN> 
+		| t = <SYMBOL_ID> 
+	)
+	{return t.image;} 
+}
+
+void Statement():
+{
+	Token t;
+	Token k;
+	String s = "";
+} {
+	"{" (Statement())* "}" 
+	| <IF> "(" Exp() ")" Statement() <ELSE> Statement() 
+	| <WHILE> "(" Exp() ")" Statement() 
+	| <STSTEM_PRINT> "(" Exp() ")" <DELIM> 
+	| LOOKAHEAD(2) t = <SYMBOL_ID> <ASSIGN> s = Exp() <DELIM> 
+		{
+			if((table.int_vec.contains(t.image) | table.bool_vec.contains(t.image) | table.String_vec.contains(t.image)) == false){
+				if(!table.error_vec.contains(t.image + " has not been declared")){
+					table.error_vec.addElement(t.image + " has not been declared");
+					table.error = 1;
+				}
+			}
+			if(s == ""){
+				table.error_vec.addElement("Assign error: cannot assign " + t.image + " with undefined type");
+				table.error = 1;
+			}
+			if(table.int_vec.contains(t.image) && (s == "Boolean" || s == "String")){
+				table.error_vec.addElement("Assign error: cannot assign " + s + " type to " + t.image);
+				table.error = 1;
+			}
+			if(table.bool_vec.contains(t.image) && (s == "int" || s == "String")){
+				table.error_vec.addElement("Assign error: cannot assign " + s + " type to " + t.image);
+				table.error = 1;
+			}
+			if(table.String_vec.contains(t.image) && (s == "int" || s == "Boolean")){
+				table.error_vec.addElement("Assign error: cannot assign " + s + " type to " + t.image);
+				table.error = 1;
+			}
+		}
+	| LOOKAHEAD(2) t = <SYMBOL_ID> "[" s = Exp() "]" <ASSIGN> Exp() <DELIM> 
+		{
+			if((table.int_vec.contains(t.image) | table.bool_vec.contains(t.image) | table.String_vec.contains(t.image)) == false){
+				if(!table.error_vec.contains(t.image + " has not been declared")){
+					table.error_vec.addElement(t.image + " has not been declared");
+					table.error = 1;
+				}
+			}
+			if(s != "int"){
+				table.error_vec.addElement("Assign error: array index must be int");
+				table.error = 1;
+			}
+		}
+}
+
+String Exp(): 
+{
+	Token t;
+}
+{
+	<INTEGER_LITERAL> Exp_hat() {return "int";}
+	| <TRUE> Exp_hat() {return "Boolean";}
+	| <FALSE> Exp_hat() {return "Boolean";}
+	| t = <SYMBOL_ID> Exp_hat() 
+		{
+			if((table.int_vec.contains(t.image) | table.bool_vec.contains(t.image) | table.String_vec.contains(t.image)) == false){
+				if(!table.error_vec.contains(t.image + " has not been declared")){
+					table.error_vec.addElement(t.image + " has not been declared");
+					table.error = 1;
+				}
+				return "";
+			}else{
+				if(table.int_vec.contains(t.image)){
+					return "int";
+				}else if(table.bool_vec.contains(t.image)){
+					return "Boolean";
+				}else if(table.String_vec.contains(t.image)){
+					return "String";
+				}
+			}
+		}
+	| <THIS> Exp_hat()  {return "";}
+	| LOOKAHEAD(2) <NEW> <INT> "[" Exp() "]" Exp_hat() {return "";}
+	| LOOKAHEAD(2) <NEW> <SYMBOL_ID> "(" ")" Exp_hat() {return "";}
+	| "!" Exp() Exp_hat() {return "";}
+	| "(" Exp() ")" Exp_hat() {return "";}
+}
+
+void Exp_hat(): {}{
+	LOOKAHEAD(2) <OP> Exp() Exp_hat() 
+	| LOOKAHEAD(2) "[" Exp() "]" Exp_hat() 
+	| (LOOKAHEAD(2) "."  <SYMBOL_ID> "(" ( Exp() ("," Exp())*)? ")" Exp_hat())? 
+}
