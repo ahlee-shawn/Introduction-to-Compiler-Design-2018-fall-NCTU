@@ -1,0 +1,5 @@
+1.run javacc 0516327_program1.jj
+2.run javac *.java
+3.run java SyntaxChecker Factorial.java
+4.If the input file is correct, it will output Syntax is okay
+5.Otherwise it will output the position of the error

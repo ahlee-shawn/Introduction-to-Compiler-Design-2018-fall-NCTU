@@ -1,0 +1,127 @@
+options
+{
+	static = true;
+}
+
+PARSER_BEGIN(SyntaxChecker)
+
+public class SyntaxChecker {
+    public static void main(String[] args) {
+        try {
+        	java.io.FileInputStream file = new java.io.FileInputStream(new java.io.File(args[0]));
+    		SyntaxChecker parser = new SyntaxChecker(file);
+   			parser.Program();
+            System.out.println("---Syntax is okay---");
+        } catch (Throwable e) {
+            System.out.println("Syntax check failed: " + e.getMessage());
+        }
+    }
+}
+
+PARSER_END(SyntaxChecker)
+
+//Token Rules and Actions
+SKIP: {
+	" "
+	| "\t"
+	| "\n"
+	| "\r"
+	| <"//" (~["\n","\r"])* ("\n"|"\r")>
+	| < "/*" > : COMMENT_STATE
+}
+
+<COMMENT_STATE> SKIP :
+{
+	< "*/" > : DEFAULT
+	| < ~[] >
+}
+
+TOKEN: {
+	  <CLASS: "class">
+	| <PUBLIC: "public">
+	| <STATIC: "static">
+	| <VOID: "void">
+	| <MAIN: "main">
+	| <INT: "int">
+	| <STRING: "String">
+	| <BOOLEAN: "Boolean">
+	| <IF: "if">
+	| <ELSE: "else">
+	| <RETURN: "return">
+	| <WHILE: "while">
+	| <STSTEM_PRINT: "System.out.println">
+	| <THIS: "this">
+	| <OP: "&&" | "<" | "+" | "-" | "*">
+	| <ASSIGN: "=">
+	| <NEW: "new">
+	| <EXTENDS: "extends">
+	| <TRUE: "true">
+	| <FALSE: "false">
+	| <SYMBOL_ID: ["a"-"z","A"-"Z"](["a"-"z","A"-"Z","0"-"9","_"])*>
+	| <INTEGER_LITERAL: "0" | ["1"-"9"](["0"-"9"])*>
+	| <DELIM: ";">
+}
+
+//Minijava Program
+void Program(): {}{
+	MainClass() (ClassDecl())* {System.out.println("Program -> MainClass ClassDecl*");}
+}
+
+void MainClass(): {}{
+	<CLASS> <SYMBOL_ID> "{" <PUBLIC> <STATIC> <VOID> <MAIN> "(" <STRING> "[" "]" <SYMBOL_ID> ")" "{" Statement() "}" "}" 
+	{System.out.println("MainClass -> Class id { public static void main (String [] id) { Statement } }");}
+}
+
+void ClassDecl(): {}{
+	<CLASS> <SYMBOL_ID> (<EXTENDS> <SYMBOL_ID>)? "{" (VarDecl())* (MethodDecl())* "}" {System.out.println("ClassDecl -> Class id (extends id)? { VarDecl* MethodDecl*}");}
+}
+
+void VarDecl(): {}{
+	Type() <SYMBOL_ID> <DELIM> {System.out.println("VarDecl -> Type id;");}
+}
+
+void MethodDecl(): {}{
+	<PUBLIC> Type() <SYMBOL_ID> "(" FormalList() ")" {System.out.println("MethodDecl -> public Type id ( FormalList )");} 
+	| "{" (LOOKAHEAD(2) VarDecl())* (Statement())* <RETURN> Exp() <DELIM> "}" {System.out.println("MethodDecl -> { VarDecl* Statement* return Exp ; }");}
+}
+
+void FormalList(): {}{
+	(Type() <SYMBOL_ID> (FormalRest())*)?  {System.out.println("(FormalList -> Type id FormalRest*)?");}
+}
+
+void FormalRest(): {}{
+	"," Type() <SYMBOL_ID>  {System.out.println("FormalRest -> , Type id");}
+}
+
+void Type(): {}{
+	<INT> ("[" "]")? {System.out.println("int ([])?");}
+	| <BOOLEAN> {System.out.println("Boolean");}
+	| <SYMBOL_ID>  {System.out.println("id");}
+}
+
+void Statement():{} {
+	"{" (Statement())* "}" {System.out.println("Statement -> { Statement* }");}
+	| <IF> "(" Exp() ")" Statement() <ELSE> Statement() {System.out.println("Statement -> if ( Exp ) Statement else Statement");}
+	| <WHILE> "(" Exp() ")" Statement() {System.out.println("Statement -> while (Exp) Statement");}
+	| <STSTEM_PRINT> "(" Exp() ")" <DELIM> {System.out.println("Statement -> System.out.println (Exp );");}
+	| LOOKAHEAD(2) <SYMBOL_ID> <ASSIGN> Exp() <DELIM> {System.out.println("Statement -> id = Exp ;");}
+	| LOOKAHEAD(2) <SYMBOL_ID> "[" Exp() "]" <ASSIGN> Exp() <DELIM> {System.out.println("Statement -> id [ Exp ] = Exp;");}
+}
+
+void Exp(): {}{
+	<INTEGER_LITERAL> Exp_hat() {System.out.println("Exp -> INTEGER_LITERAL Exp_hat");}
+	| <TRUE> Exp_hat() {System.out.println("Exp -> true Exp_hat");}
+	| <FALSE> Exp_hat() {System.out.println("Exp -> false Exp_hat");}
+	| <SYMBOL_ID> Exp_hat() {System.out.println("Exp -> id Exp_hat");}
+	| <THIS> Exp_hat() {System.out.println("Exp -> this Exp_hat");}
+	| LOOKAHEAD(2) <NEW> <INT> "[" Exp() "]" Exp_hat() {System.out.println("Exp -> new int [ Exp ] Exp_hat");}
+	| LOOKAHEAD(2) <NEW> <SYMBOL_ID> "(" ")" Exp_hat() {System.out.println("Exp -> new id ( ) Exp_hat");}
+	| "!" Exp() Exp_hat() {System.out.println("Exp -> ! Exp Exp_hat");}
+	| "(" Exp() ")" Exp_hat() {System.out.println("Exp -> ( Exp ) Exp_hat");}
+}
+
+void Exp_hat(): {}{
+	LOOKAHEAD(2) <OP> Exp() Exp_hat() {System.out.println("Exp_hat -> op Exp Exp_hat");}
+	| LOOKAHEAD(2) "[" Exp() "]" Exp_hat() {System.out.println("Exp_hat -> [ Exp ] Exp_hat");}
+	| (LOOKAHEAD(2) "."  <SYMBOL_ID> "(" ( Exp() ("," Exp())*)? ")" Exp_hat())? {System.out.println("Exp_hat -> . id ( ( Exp ( , Exp )*)? ) Exp_hat");}
+}
